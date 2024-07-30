@@ -2,6 +2,7 @@
 
 #include "../hde/hde64.h"
 #include "../utils/Crypto.hpp"
+#include "../utils/Memory.hpp"
 
 size_t SHook::calcPollutedCodeSize(LPVOID oldFunction) {
 	char* p = reinterpret_cast<PCHAR>(oldFunction);
@@ -36,11 +37,28 @@ void SHook::createHook(std::string label, LPVOID oldFunction, LPVOID newFunction
 	//2.2 create heap struct
 	auto bkBlock = new codeBlock;
 	auto PhookCode = new jmpCode(reinterpret_cast<DWORD64>(newFunction));
+	DWORD64 realOldFuncAddr = 0;
 	bkBlock->pollutedLen = pollutedLen;
 	bkBlock->buffer = *oldFuncBackup;
 	bkBlock->Phookcode = PhookCode;
 	bkBlock->newFuncAddr = newFunction;
-	bkBlock->oldFuncAddr = oldFunction;
+	//parser asm code
+	if (reinterpret_cast<PBYTE>(oldFunction)[0] == 0xE9) {	//jmp #inst
+		realOldFuncAddr += reinterpret_cast<DWORD64>(&reinterpret_cast<PBYTE>(oldFunction)[1]);
+		realOldFuncAddr += 5 + Memory::ReadDWORD32(&reinterpret_cast<PBYTE>(oldFunction)[1]);
+		bkBlock->oldFuncAddr = reinterpret_cast<LPVOID>(realOldFuncAddr);
+	}
+	else if (reinterpret_cast<PBYTE>(oldFunction)[0] == 0x48 &&
+		reinterpret_cast<PBYTE>(oldFunction)[1] == 0xff &&
+		reinterpret_cast<PBYTE>(oldFunction)[2] == 0x25	) {	//jmp ptr
+		realOldFuncAddr += reinterpret_cast<DWORD64>(&reinterpret_cast<PBYTE>(oldFunction)[3] + sizeof(DWORD));
+		realOldFuncAddr += Memory::ReadDWORD32(&reinterpret_cast<PBYTE>(oldFunction)[3]);
+		realOldFuncAddr = Memory::ReadDWORD64(reinterpret_cast<LPVOID>(realOldFuncAddr));
+		bkBlock->oldFuncAddr = reinterpret_cast<LPVOID>(realOldFuncAddr);
+
+	}
+	else
+		bkBlock->oldFuncAddr = oldFunction;
 	//2.3 create label
 	SHook::xBuffer.insert(std::make_pair(
 		Crypto::cHash(label.c_str(), label.length()),
@@ -49,9 +67,9 @@ void SHook::createHook(std::string label, LPVOID oldFunction, LPVOID newFunction
 
 	//3. transfer polluted code
 	//3.1 generate jmp back code
-	jmpCode jmpBack(reinterpret_cast<DWORD64>(oldFunction) + pollutedLen);
+	jmpCode jmpBack(reinterpret_cast<DWORD64>(bkBlock->oldFuncAddr) + pollutedLen);
 	//3.2 copy polluted code and jmp back code
-	RtlCopyMemory(*oldFuncBackup, oldFunction, pollutedLen);
+	RtlCopyMemory(*oldFuncBackup, bkBlock->oldFuncAddr, pollutedLen);
 	RtlCopyMemory(
 		reinterpret_cast<LPVOID>(
 			reinterpret_cast<DWORD64>(*oldFuncBackup) + pollutedLen),

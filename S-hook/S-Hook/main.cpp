@@ -6,10 +6,13 @@
 
 // 定义指向原始 test 函数的指针类型
 typedef void (WINAPI* Test_t)();
+typedef void (WINAPI* Sleep_t)(DWORD);
 
 Test_t oldTestptr = nullptr;
+Sleep_t oldSleep = nullptr;
 
 void test() {
+    puts("test first line\n");
     int i = 1;
     ++i;
     ++i;
@@ -28,6 +31,10 @@ void test2() {
     oldTestptr();
 }
 
+void WINAPI MySleep(DWORD mil) {
+    std::cout << "mil: " << mil << std::endl;
+    oldSleep(mil);
+}
 int main()
 {
     SHook::createHook("test", test, test2, reinterpret_cast<LPVOID*>(&oldTestptr));
@@ -35,5 +42,10 @@ int main()
     test();
     SHook::disableHook("test");
     test();
+
+    //SHook::createHook("Sleep", Sleep, MySleep, reinterpret_cast<LPVOID*>(&oldSleep));
+    //Sleep(1021);
+    //SHook::enableHook("Sleep");
+    //Sleep(1021);
     return 0;
 }

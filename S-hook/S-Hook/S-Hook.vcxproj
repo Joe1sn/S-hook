@@ -146,6 +146,7 @@
     <ClInclude Include="hde\table64.h" />
     <ClInclude Include="S-Hook.h" />
     <ClInclude Include="utils\Crypto.hpp" />
+    <ClInclude Include="utils\Memory.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
